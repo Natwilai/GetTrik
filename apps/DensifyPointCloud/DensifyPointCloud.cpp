@@ -48,6 +48,7 @@ String strInputFileName;
 String strOutputFileName;
 String strMeshFileName;
 String strDenseConfigFileName;
+bool bPointsExport;
 int nArchiveType;
 int nProcessPriority;
 unsigned nMaxThreads;
@@ -106,6 +107,7 @@ bool Initialize(size_t argc, LPCTSTR* argv)
 	boost::program_options::options_description hidden("Hidden options");
 	hidden.add_options()
 		("dense-config-file", boost::program_options::value<std::string>(&OPT::strDenseConfigFileName), "optional configuration file for the densifier (overwritten by the command line options)")
+		("points-export", boost::program_options::value<bool>(&OPT::bPointsExport)->default_value(false), "just export the point-cloud contained in loaded project")
 		;
 
 	boost::program_options::options_description cmdline_options;
@@ -216,21 +218,28 @@ int main(int argc, LPCTSTR* argv)
 		VERBOSE("error: empty initial point-cloud");
 		return EXIT_FAILURE;
 	}
-	if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
-		TD_TIMER_START();
-		if (!scene.DenseReconstruction())
-			return EXIT_FAILURE;
-		VERBOSE("Densifying point-cloud completed: %u points (%s)", scene.pointcloud.points.GetSize(), TD_TIMER_GET_FMT().c_str());
+	if (OPT::bPointsExport) {
+		// save the existing point-cloud
+		const String fileName(Util::getFullFileName(MAKE_PATH_SAFE(OPT::strInputFileName)));
+		scene.ExportCamerasTXT(fileName+_T("_cameras.txt"));
+		scene.ExportPointsXYZ(fileName+_T("_points.txt"));
+	} else {
+		// estimated point-cloud
+		if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
+			TD_TIMER_START();
+			if (!scene.DenseReconstruction())
+				return EXIT_FAILURE;
+			VERBOSE("Densifying point-cloud completed: %u points (%s)", scene.pointcloud.points.GetSize(), TD_TIMER_GET_FMT().c_str());
+		}
+		// save the estimated point-cloud
+		const String baseFileName(MAKE_PATH_SAFE(Util::getFullFileName(OPT::strOutputFileName)));
+		scene.Save(baseFileName+_T(".mvs"), (ARCHIVE_TYPE)OPT::nArchiveType);
+		scene.pointcloud.Save(baseFileName+_T(".ply"));
+		#if TD_VERBOSE != TD_VERBOSE_OFF
+		if (VERBOSITY_LEVEL > 2)
+			scene.ExportCamerasMLP(baseFileName+_T(".mlp"), baseFileName+_T(".ply"));
+		#endif
 	}
-
-	// save the final mesh
-	const String baseFileName(MAKE_PATH_SAFE(Util::getFullFileName(OPT::strOutputFileName)));
-	scene.Save(baseFileName+_T(".mvs"), (ARCHIVE_TYPE)OPT::nArchiveType);
-	scene.pointcloud.Save(baseFileName+_T(".ply"));
-	#if TD_VERBOSE != TD_VERBOSE_OFF
-	if (VERBOSITY_LEVEL > 2)
-		scene.ExportCamerasMLP(baseFileName+_T(".mlp"), baseFileName+_T(".ply"));
-	#endif
 
 	Finalize();
 	return EXIT_SUCCESS;

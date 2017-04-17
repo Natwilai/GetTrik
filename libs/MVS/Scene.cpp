@@ -590,3 +590,59 @@ bool Scene::ExportCamerasMLP(const String& fileName, const String& fileNameScene
 	return true;
 } // ExportCamerasMLP
 /*----------------------------------------------------------------*/
+
+// export all estimated cameras as (3,4) projection matrix
+bool Scene::ExportCamerasTXT(const String& fileName) const
+{
+	Util::ensureDirectory(fileName);
+	File f(fileName, File::WRITE, File::CREATE | File::TRUNCATE);
+
+	// write the projection matrices
+	FOREACH(i, images) {
+		const Image& imageData = images[i];
+		// skip invalid, uncalibrated or discarded images
+		if (!imageData.IsValid())
+			continue;
+		const Camera& camera = imageData.camera;
+		f.print("%g %g %g %g %g %g %g %g %g %g %g %g\n",
+			camera.P(0,0), camera.P(0,1), camera.P(0,2), camera.P(0,3),
+			camera.P(1,0), camera.P(1,1), camera.P(1,2), camera.P(1,3),
+			camera.P(2,0), camera.P(2,1), camera.P(2,2), camera.P(2,3)
+		);
+	}
+
+	return true;
+} // ExportCamerasTXT
+/*----------------------------------------------------------------*/
+
+// export all estimated points as X Y Z R G B <camera IDs>
+bool Scene::ExportPointsXYZ(const String& fileName) const
+{
+	ASSERT(!pointcloud.IsEmpty());
+
+	Util::ensureDirectory(fileName);
+	File f(fileName, File::WRITE, File::CREATE | File::TRUNCATE);
+
+	// map valid cameras
+	IIndex nCameraID(0);
+	IIndexArr mapCameras(images.size());
+	FOREACH(i, images)
+		mapCameras[i] = (images[i].IsValid() ? nCameraID++ : NO_ID);
+
+	// write the points
+	FOREACH(i, pointcloud.points) {
+		String str;
+		const PointCloud::Point& X = pointcloud.points[i];
+		str += String::FormatString("%g %g %g", X.x, X.y, X.z);
+		const PointCloud::Color& c = pointcloud.colors[i];
+		str += String::FormatString(" %u %u %u", c.r, c.g, c.b);
+		const PointCloud::ViewArr& views = pointcloud.pointViews[i];
+		for (PointCloud::View idxView: views)
+			str += String::FormatString(" %u", mapCameras[idxView]);
+		str += "\n";
+		f.print(str);
+	}
+
+	return true;
+} // ExportPointsXYZ
+/*----------------------------------------------------------------*/
