@@ -76,6 +76,7 @@ public:
 	bool ExportCamerasMLP(const String& fileName, const String& fileNameScene) const;
 	bool ExportCamerasTXT(const String& fileName) const;
 	bool ExportPointsXYZ(const String& fileName) const;
+    bool ExportNVM(const String& fileName) const;                                                                         //  # new function
 
 	// Dense reconstruction
 	bool DenseReconstruction();

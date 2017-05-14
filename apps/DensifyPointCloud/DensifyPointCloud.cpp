@@ -206,10 +206,8 @@ int main(int argc, LPCTSTR* argv)
 	// set _crtBreakAlloc index to stop in <dbgheap.c> at allocation
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);// | _CRTDBG_CHECK_ALWAYS_DF);
 	#endif
-
 	if (!Initialize(argc, argv))
 		return EXIT_FAILURE;
-
 	Scene scene(OPT::nMaxThreads);
 	// load and estimate a dense point-cloud
 	if (!scene.Load(MAKE_PATH_SAFE(OPT::strInputFileName)))
@@ -221,8 +219,12 @@ int main(int argc, LPCTSTR* argv)
 	if (OPT::bPointsExport) {
 		// save the existing point-cloud
 		const String fileName(Util::getFullFileName(MAKE_PATH_SAFE(OPT::strInputFileName)));
+std::cout << "step1  OPT::strInputFileName="<<OPT::strInputFileName<<"   filename=" << fileName <<  std::endl << std::flush;
 		scene.ExportCamerasTXT(fileName+_T("_cameras.txt"));
-		scene.ExportPointsXYZ(fileName+_T("_points.txt"));
+		scene.ExportPointsXYZ(fileName+_T("_points.xyz"));
+std::cout << "step2" << std::endl << std::flush;
+        scene.ExportNVM(fileName+_T("_scene.nvm"));                             //   new function
+std::cout << "step3" << std::endl << std::flush;
 	} else {
 		// estimated point-cloud
 		if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
@@ -240,6 +242,7 @@ int main(int argc, LPCTSTR* argv)
 			scene.ExportCamerasMLP(baseFileName+_T(".mlp"), baseFileName+_T(".ply"));
 		#endif
 	}
+//std::cout << "step6" << std::endl << std::flush;
 
 	Finalize();
 	return EXIT_SUCCESS;

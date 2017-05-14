@@ -284,7 +284,7 @@ bool Scene::Load(const String& fileName)
 	TD_TIMER_STARTD();
 	Release();
 
-	#ifdef _USE_BOOST
+//	#ifdef _USE_BOOST                                                                                        // ## temporary comment out  for semantic parsing in Kdevelop
 	// open the input stream
 	std::ifstream fs(fileName, std::ios::in | std::ios::binary);
 	if (!fs.is_open())
@@ -315,7 +315,7 @@ bool Scene::Load(const String& fileName)
 	// serialize in the current state
 	if (!SerializeLoad(*this, fs, (ARCHIVE_TYPE)nType))
 		return false;
-	// init images
+	// init images                                                                                                    //  images 
 	nCalibratedImages = 0;
 	size_t nTotalPixels(0);
 	FOREACH(ID, images) {
@@ -333,9 +333,10 @@ bool Scene::Load(const String& fileName)
 				images.GetSize(), nCalibratedImages, (double)nTotalPixels/(1024.0*1024.0), (double)nTotalPixels/(1024.0*1024.0*nCalibratedImages),
 				pointcloud.points.GetSize(), mesh.vertices.GetSize(), mesh.faces.GetSize());
 	return true;
-	#else
+/*	#else
 	return false;
-	#endif
+	#endif 
+*/    
 } // Load
 
 bool Scene::Save(const String& fileName, ARCHIVE_TYPE type) const
@@ -619,30 +620,202 @@ bool Scene::ExportCamerasTXT(const String& fileName) const
 bool Scene::ExportPointsXYZ(const String& fileName) const
 {
 	ASSERT(!pointcloud.IsEmpty());
-
 	Util::ensureDirectory(fileName);
 	File f(fileName, File::WRITE, File::CREATE | File::TRUNCATE);
-
 	// map valid cameras
 	IIndex nCameraID(0);
 	IIndexArr mapCameras(images.size());
 	FOREACH(i, images)
 		mapCameras[i] = (images[i].IsValid() ? nCameraID++ : NO_ID);
-
 	// write the points
 	FOREACH(i, pointcloud.points) {
 		String str;
 		const PointCloud::Point& X = pointcloud.points[i];
 		str += String::FormatString("%g %g %g", X.x, X.y, X.z);
 		const PointCloud::Color& c = pointcloud.colors[i];
-		str += String::FormatString(" %u %u %u", c.r, c.g, c.b);
+		str += String::FormatString(" %u %u %u", c.r, c.g, c.b); // nb causes seg fault if points have no colour
 		const PointCloud::ViewArr& views = pointcloud.pointViews[i];
 		for (PointCloud::View idxView: views)
 			str += String::FormatString(" %u", mapCameras[idxView]);
 		str += "\n";
 		f.print(str);
 	}
-
 	return true;
 } // ExportPointsXYZ
 /*----------------------------------------------------------------*/
+
+/*Notes: GetTrik/apps/InterfaceVisualSFM.cpp lines 300 to 351  convert from PBA to MVS::Scene classes
+ 
+ 	MVS::Scene scene(OPT::nMaxThreads);
+	scene.platforms.Reserve((uint32_t)cameras.size());
+	scene.images.Reserve((uint32_t)cameras.size());
+	scene.nCalibratedImages = 0;
+	for (size_t idx=0; idx<cameras.size(); ++idx) {
+		MVS::Image& image = scene.images.AddEmpty();
+		image.name = names[idx];
+		Util::ensureUnifySlash(image.name);
+		image.name = MAKE_PATH_FULL(WORKING_FOLDER_FULL, image.name);
+		if (!image.ReloadImage(0, false)) {
+			LOG("error: can not read image %s", image.name.c_str());
+			return EXIT_FAILURE;
+		}
+				// set camera
+		image.platformID = scene.platforms.GetSize();
+		MVS::Platform& platform = scene.platforms.AddEmpty();
+		MVS::Platform::Camera& camera = platform.cameras.AddEmpty();
+		image.cameraID = 0;
+		const PBA::Camera& cameraNVM = cameras[idx];
+		camera.K = MVS::Platform::Camera::ComposeK<REAL,REAL>(cameraNVM.GetFocalLength(), cameraNVM.GetFocalLength(), image.width, image.height);
+		camera.R = RMatrix::IDENTITY;
+		camera.C = CMatrix::ZERO;
+		// normalize camera intrinsics
+		const REAL fScale(REAL(1)/MVS::Camera::GetNormalizationScale(image.width, image.height));
+		camera.K(0, 0) *= fScale;
+		camera.K(1, 1) *= fScale;
+		camera.K(0, 2) *= fScale;
+		camera.K(1, 2) *= fScale;
+		// set pose
+		image.poseID = platform.poses.GetSize();
+		MVS::Platform::Pose& pose = platform.poses.AddEmpty();
+		cameraNVM.GetMatrixRotation(pose.R.val);
+		cameraNVM.GetCameraCenter(pose.C.ptr());
+		image.UpdateCamera(scene.platforms);
+		++scene.nCalibratedImages;
+	}
+		scene.pointcloud.points.Reserve(vertices.size());
+	for (size_t idx=0; idx<vertices.size(); ++idx) {
+		const PBA::Point3D& X = vertices[idx];
+		scene.pointcloud.points.AddConstruct(X.xyz[0], X.xyz[1], X.xyz[2]);
+	}
+	if (ptc.size() == vertices.size()*3) {
+		scene.pointcloud.colors.Reserve(ptc.size());
+		for (size_t idx=0; idx<ptc.size(); idx+=3)
+			scene.pointcloud.colors.AddConstruct((uint8_t)ptc[idx+0], (uint8_t)ptc[idx+1], (uint8_t)ptc[idx+2]);
+	}
+	scene.pointcloud.pointViews.Resize(vertices.size());
+	for (size_t idx=0; idx<measurements.size(); ++idx) {
+		MVS::PointCloud::ViewArr& views = scene.pointcloud.pointViews[correspondingPoint[idx]];
+		views.InsertSort(correspondingView[idx]);
+	}
+ */
+
+/*  //from GetTrik/Apps/InterfaceVisualSFM/Util.h line 142
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <math.h>
+#include <time.h>
+#include <iomanip>
+#include <algorithm>
+#include "/home/nick/Programming/GetTrik/openMVS_openMVG/GetTrik/apps/InterfaceVisualSFM/DataInterface.h"
+namespace PBA {
+// void SaveModelFile(const char* outpath, std::vector<CameraT>& camera_data, std::vector<Point3D>& point_data, std::vector<Point2D>& measurements, std::vector<int>& ptidx, std::vector<int>& camidx,               std::vector<std::string>& names, std::vector<int>& ptc)              {...SaveNVM(outpath, camera_data, point_data, measurements, ptidx, camidx, names, ptc);   ...}
+void SaveNVM(const char* filename, std::vector<CameraT>& camera_data, std::vector<Point3D>& point_data,
+              std::vector<Point2D>& measurements, std::vector<int>& ptidx, std::vector<int>& camidx, 
+              std::vector<std::string>& names, std::vector<int>& ptc)
+{
+    LOG_OUT() << "Saving model to " << filename << "...\n"; 
+    std::ofstream out(filename);
+
+    out << "NVM_V3_R9T\n" << camera_data.size() << '\n' << std::setprecision(12);
+    if(names.size() < camera_data.size()) names.resize(camera_data.size(),std::string("unknown"));
+    if(ptc.size() < 3 * point_data.size()) ptc.resize(point_data.size() * 3, 0);
+
+    ////////////////////////////////////
+    for(size_t i = 0; i < camera_data.size(); ++i)
+    {
+        CameraT& cam = camera_data[i];
+        out << names[i] << ' ' << cam.GetFocalLength() << ' ';
+        for(int j  = 0; j < 9; ++j) out << cam.m[0][j] << ' ';
+        out << cam.t[0] << ' ' << cam.t[1] << ' ' << cam.t[2] << ' '
+            << cam.GetNormalizedMeasurementDistortion() << " 0\n"; 
+    }
+
+    out << point_data.size() << '\n';
+
+    for(size_t i = 0, j = 0; i < point_data.size(); ++i)
+    {
+        Point3D& pt = point_data[i];
+        int * pc = &ptc[i * 3];
+        out << pt.xyz[0] << ' ' << pt.xyz[1] << ' ' << pt.xyz[2] << ' ' 
+            << pc[0] << ' ' << pc[1] << ' ' << pc[2] << ' '; 
+
+        size_t je = j;
+        while(je < ptidx.size() && ptidx[je] == (int) i) je++;
+        
+        out << (je - j) << ' ';
+
+        for(; j < je; ++j)    out << camidx[j] << ' ' << " 0 " << measurements[j].x << ' ' << measurements[j].y << ' ';
+        
+        out << '\n';
+    }
+}// SaveNVM(...)  // from GetTrik/Apps/InterfaceVisualSFM/Util.h 
+
+}// namespace PBA
+*/
+//std::cout << "step g"  <<  " pointcloud.GetSize()=" << pointcloud.GetSize()<< std::endl << std::flush;
+
+bool Scene::ExportNVM(const String& fileName) const
+{
+    ASSERT(!pointcloud.IsEmpty());
+    
+    Util::ensureDirectory(fileName);
+    File f(fileName, File::WRITE, File::CREATE | File::TRUNCATE);
+    //NVM_V3 [optional calibration]                        # file version header
+    f <<  " NVM_V3_R9T\n";                                // use 3x3 rot mat not quaternions
+    
+    //one scene => one model
+    //model : num cameras, list cameras, num points, list points
+
+    // Number of cameras
+    IIndexArr mapCameras(images.size());
+     f << images.size()<<"\n"<<std::setprecision(12);
+     
+    //  List of cameras
+    //  E.g.    ..\Surveyed_House\DJI_1093.JPG	3653.76416016 0.815212988198 0.208880549694 -0.520199353323 -0.145567341041 -0.47546258465 -0.0211134698793 -0.367527993944 0.00530732612219 0 
+    FOREACH(i, images){
+        const Image& imageData = images[i];
+        const Camera& camera = imageData.camera;
+        // File name
+        f<<imageData.name.c_str() ;
+        //focal length
+        f<<"   "<<camera.K(0,0)<<"   ";
+        //3x3 rot mat  -  in place of quaternion WXYZ
+        f<<camera.R(0,0)<<' '<<camera.R(0,1)<<' '<<camera.R(0,2)<<' '<<camera.R(1,0)<<' '<< camera.R(1,1)<<' '<< camera.R(1,2)<<' '<< camera.R(2,0)<<' '<< camera.R(2,1)<<' '<<camera.R(2,2)<<"   " ;
+        //camera center x,y,z
+        f<<camera.C.x<<' '<<camera.C.y<<' '<<camera.C.z<<"   " ;    // nb this inherits opencv point3f
+        //radial distortion 0, (reference the undistorted images ?)
+        // terminating 0\n
+        f << " 0 0\n" ;
+    }
+     
+    // Number of 3D points
+    f<<pointcloud.GetSize()<<'\n';
+    
+    // List of points
+    //  Point: xyz, rgb, number of measurements, list of measurements
+    //  Each measurement:  image_index,  feature_index, x,y coord
+    // E.g. one point:  0.351868  -0.0911496  2.21431   250 100 150    3     0  28  1954.13  951.353    1  2076  1806.01  914.185    4  1988  1907.15  874.684 
+	FOREACH(i, pointcloud.points) {
+		String str;
+		const PointCloud::Point& X = pointcloud.points[i];
+		str += String::FormatString("%g %g %g", X.x, X.y, X.z);            // x,y,z
+		const PointCloud::Color& c = pointcloud.colors[i];
+		str += String::FormatString("  %u %u %u", c.r, c.g, c.b);             // r,g,b  // nb will seg faulf if points have no colour
+        
+		const PointCloud::ViewArr& views = pointcloud.pointViews[i]; 
+        str += String::FormatString("  %u ", views.size()  );    // number of measurements
+		for (PointCloud::View idxView: views) {                   // list of measurements
+            str += String::FormatString(" %u", idxView );        // image Index ... a uint32_t
+            str += String::FormatString(" %u", 0);                   // feature index 
+            str += String::FormatString(" %g %g ",0.10, 0.20 );  // x,y coord of feature ie project point back to that image ?
+        }
+		str += "\n";
+		f.print(str);
+	}
+    f<<0; // final zero at end of points list.
+    
+    return true;
+} //ExportNVM
+
