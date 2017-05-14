@@ -223,7 +223,7 @@ std::cout << "step1  OPT::strInputFileName="<<OPT::strInputFileName<<"   filenam
 		scene.ExportCamerasTXT(fileName+_T("_cameras.txt"));
 		scene.ExportPointsXYZ(fileName+_T("_points.xyz"));
 std::cout << "step2" << std::endl << std::flush;
-        scene.ExportNVM(fileName+_T("_scene.nvm"));                             //   new function
+        scene.ExportNVM(fileName+_T("_scene.nvm"));                                              //  # new function
 std::cout << "step3" << std::endl << std::flush;
 	} else {
 		// estimated point-cloud
@@ -242,7 +242,6 @@ std::cout << "step3" << std::endl << std::flush;
 			scene.ExportCamerasMLP(baseFileName+_T(".mlp"), baseFileName+_T(".ply"));
 		#endif
 	}
-//std::cout << "step6" << std::endl << std::flush;
 
 	Finalize();
 	return EXIT_SUCCESS;

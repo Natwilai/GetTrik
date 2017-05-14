@@ -633,7 +633,7 @@ bool Scene::ExportPointsXYZ(const String& fileName) const
 		const PointCloud::Point& X = pointcloud.points[i];
 		str += String::FormatString("%g %g %g", X.x, X.y, X.z);
 		const PointCloud::Color& c = pointcloud.colors[i];
-		str += String::FormatString(" %u %u %u", c.r, c.g, c.b); // nb causes seg fault if points have no colour
+		str += String::FormatString(" %u %u %u", c.r, c.g, c.b);                 // nb causes seg fault if points have no colour: try-catch
 		const PointCloud::ViewArr& views = pointcloud.pointViews[i];
 		for (PointCloud::View idxView: views)
 			str += String::FormatString(" %u", mapCameras[idxView]);
@@ -754,45 +754,31 @@ void SaveNVM(const char* filename, std::vector<CameraT>& camera_data, std::vecto
 
 }// namespace PBA
 */
-//std::cout << "step g"  <<  " pointcloud.GetSize()=" << pointcloud.GetSize()<< std::endl << std::flush;
 
 bool Scene::ExportNVM(const String& fileName) const
 {
     ASSERT(!pointcloud.IsEmpty());
-    
     Util::ensureDirectory(fileName);
     File f(fileName, File::WRITE, File::CREATE | File::TRUNCATE);
-    //NVM_V3 [optional calibration]                        # file version header
-    f <<  " NVM_V3_R9T\n";                                // use 3x3 rot mat not quaternions
-    
-    //one scene => one model
+    //NVM_V3 [optional calibration]                                                           // file version header
+    f <<  " NVM_V3_R9T\n";                                                                      // use 3x3 rot mat not quaternions
+    //one scene => one model.  .nvm file can have multiple models.
     //model : num cameras, list cameras, num points, list points
-
-    // Number of cameras
     IIndexArr mapCameras(images.size());
-     f << images.size()<<"\n"<<std::setprecision(12);
-     
+     f << images.size()<<"\n"<<std::setprecision(12);                       // Number of cameras
     //  List of cameras
     //  E.g.    ..\Surveyed_House\DJI_1093.JPG	3653.76416016 0.815212988198 0.208880549694 -0.520199353323 -0.145567341041 -0.47546258465 -0.0211134698793 -0.367527993944 0.00530732612219 0 
-    FOREACH(i, images){
+    FOREACH(i, images){                                                                          //# to refactor : choose one method of writing to file.
         const Image& imageData = images[i];
         const Camera& camera = imageData.camera;
-        // File name
-        f<<imageData.name.c_str() ;
-        //focal length
-        f<<"   "<<camera.K(0,0)<<"   ";
-        //3x3 rot mat  -  in place of quaternion WXYZ
-        f<<camera.R(0,0)<<' '<<camera.R(0,1)<<' '<<camera.R(0,2)<<' '<<camera.R(1,0)<<' '<< camera.R(1,1)<<' '<< camera.R(1,2)<<' '<< camera.R(2,0)<<' '<< camera.R(2,1)<<' '<<camera.R(2,2)<<"   " ;
-        //camera center x,y,z
-        f<<camera.C.x<<' '<<camera.C.y<<' '<<camera.C.z<<"   " ;    // nb this inherits opencv point3f
-        //radial distortion 0, (reference the undistorted images ?)
-        // terminating 0\n
-        f << " 0 0\n" ;
+        f<<imageData.name.c_str() ;                                                         // File name  
+        f<<"   "<<camera.K(0,0)<<"   ";                                                   //focal length
+        f<<camera.R(0,0)<<' '<<camera.R(0,1)<<' '<<camera.R(0,2)<<' '<<camera.R(1,0)<<' '<< camera.R(1,1)<<' '<< camera.R(1,2)<<' '<< camera.R(2,0)<<' '<< camera.R(2,1)<<' '<<camera.R(2,2)<<"   " ;  
+                                                                                                                //3x3 rot mat  -  in place of quaternion WXYZ
+        f<<camera.C.x<<' '<<camera.C.y<<' '<<camera.C.z<<"   " ;    //camera center x,y,z  //nb camera.C  inherits opencv point3f
+        f << " 0 0\n" ;                                                                                 //radial distortion 0,  terminating 0\n
     }
-     
-    // Number of 3D points
-    f<<pointcloud.GetSize()<<'\n';
-    
+    f<<pointcloud.GetSize()<<'\n';                                                          // Number of 3D points
     // List of points
     //  Point: xyz, rgb, number of measurements, list of measurements
     //  Each measurement:  image_index,  feature_index, x,y coord
@@ -800,22 +786,21 @@ bool Scene::ExportNVM(const String& fileName) const
 	FOREACH(i, pointcloud.points) {
 		String str;
 		const PointCloud::Point& X = pointcloud.points[i];
-		str += String::FormatString("%g %g %g", X.x, X.y, X.z);            // x,y,z
+		str += String::FormatString("%g %g %g", X.x, X.y, X.z);               // x,y,z
 		const PointCloud::Color& c = pointcloud.colors[i];
-		str += String::FormatString("  %u %u %u", c.r, c.g, c.b);             // r,g,b  // nb will seg faulf if points have no colour
+		str += String::FormatString("  %u %u %u", c.r, c.g, c.b);              // r,g,b  // nb will seg fault if points have no colour: try-catch
         
 		const PointCloud::ViewArr& views = pointcloud.pointViews[i]; 
-        str += String::FormatString("  %u ", views.size()  );    // number of measurements
-		for (PointCloud::View idxView: views) {                   // list of measurements
-            str += String::FormatString(" %u", idxView );        // image Index ... a uint32_t
-            str += String::FormatString(" %u", 0);                   // feature index 
-            str += String::FormatString(" %g %g ",0.10, 0.20 );  // x,y coord of feature ie project point back to that image ?
+        str += String::FormatString("  %u ", views.size()  );                       // number of measurements
+		for (PointCloud::View idxView: views) {                                       // list of measurements
+            str += String::FormatString(" %u", idxView );                            // image Index ... a uint32_t
+            str += String::FormatString(" %u", 0);                                       // # feature index 
+            str += String::FormatString(" %g %g ",0.10, 0.20 );                  // # x,y coord of feature ie project point back to that image ?
         }
 		str += "\n";
 		f.print(str);
 	}
-    f<<0; // final zero at end of points list.
-    
+    f<<0;                                                                                                   // final zero at end of points list.
     return true;
 } //ExportNVM
 
