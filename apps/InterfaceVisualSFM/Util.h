@@ -116,10 +116,10 @@ bool LoadNVM(std::ifstream& in, std::vector<CameraT>& camera_data, std::vector<P
     {
         float pt[3]; int cc[3], npj;
         in  >> pt[0] >> pt[1] >> pt[2] 
-            >> cc[0] >> cc[1] >> cc[2] >> npj;
+            >> cc[0] >> cc[1] >> cc[2] >> npj;  // njp number of measurements of 3D point, ie images in which it appears.
         for(int j = 0; j < npj; ++j)
         {
-            int cidx, fidx; float imx, imy;
+            int cidx, fidx; float imx, imy;  //camera index, feature index, x,y coords. NB feature index not kept. 
             in >> cidx >> fidx >> imx >> imy;
 
             camidx.push_back(cidx);    //camera index

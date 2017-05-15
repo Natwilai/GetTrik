@@ -765,6 +765,7 @@ bool Scene::ExportNVM(const String& fileName) const
     //one scene => one model.  .nvm file can have multiple models.
     //model : num cameras, list cameras, num points, list points
     IIndexArr mapCameras(images.size());
+    //PMatrixArr projections(images.size());
      f << images.size()<<"\n"<<std::setprecision(12);                       // Number of cameras
     //  List of cameras
     //  E.g.    ..\Surveyed_House\DJI_1093.JPG	3653.76416016 0.815212988198 0.208880549694 -0.520199353323 -0.145567341041 -0.47546258465 -0.0211134698793 -0.367527993944 0.00530732612219 0 
@@ -777,6 +778,12 @@ bool Scene::ExportNVM(const String& fileName) const
                                                                                                                 //3x3 rot mat  -  in place of quaternion WXYZ
         f<<camera.C.x<<' '<<camera.C.y<<' '<<camera.C.z<<"   " ;    //camera center x,y,z  //nb camera.C  inherits opencv point3f
         f << " 0 0\n" ;                                                                                 //radial distortion 0,  terminating 0\n
+        
+        // fill  ProjMatArry
+        //Platform platform = platforms[0] ;                                               //Assumes there is only 1 platform
+        //PMatrix P;
+        //AssembleProjectionMatrix(camera.K, platform.poses[i].R  , platform.poses[i].C,   P);
+        //projections[i] = P;
     }
     f<<pointcloud.GetSize()<<'\n';                                                          // Number of 3D points
     // List of points
@@ -785,20 +792,29 @@ bool Scene::ExportNVM(const String& fileName) const
     // E.g. one point:  0.351868  -0.0911496  2.21431   250 100 150    3     0  28  1954.13  951.353    1  2076  1806.01  914.185    4  1988  1907.15  874.684 
 	FOREACH(i, pointcloud.points) {
 		String str;
-		const PointCloud::Point& X = pointcloud.points[i];
+		const Point3 X = pointcloud.points[i];
 		str += String::FormatString("%g %g %g", X.x, X.y, X.z);               // x,y,z
 		const PointCloud::Color& c = pointcloud.colors[i];
 		str += String::FormatString("  %u %u %u", c.r, c.g, c.b);              // r,g,b  // nb will seg fault if points have no colour: try-catch
         
 		const PointCloud::ViewArr& views = pointcloud.pointViews[i]; 
         str += String::FormatString("  %u ", views.size()  );                       // number of measurements
+std::cout<<"views.size()="<<views.size();
 		for (PointCloud::View idxView: views) {                                       // list of measurements
             str += String::FormatString(" %u", idxView );                            // image Index ... a uint32_t
-            str += String::FormatString(" %u", 0);                                       // # feature index 
-            str += String::FormatString(" %g %g ",0.10, 0.20 );                  // # x,y coord of feature ie project point back to that image ?
+            str += String::FormatString(" %u", 0);                                       // # feature index // not stored by Scene class
+std::cout<<" |  "<<" idxView="<<idxView<<" views[idxView]="<<views[idxView]<<"  "<<std::flush;
+            if(views[idxView]>images.size() ){
+                str += String::FormatString(" %g %g ",0.1, 0.1 );
+                continue;
+            }
+            Camera cam = images[ views[idxView] ].camera;                     // ? does this take account of camera pose ?
+            const Point2 point2 =  cam.TransformPointW2I(X);                          // project 3D point into image
+            str += String::FormatString(" %g %g ",point2.x, point2.y );       // # x,y coord of feature ie project point back to that image ?
         }
 		str += "\n";
 		f.print(str);
+std::cout<<std::endl<<std::flush;
 	}
     f<<0;                                                                                                   // final zero at end of points list.
     return true;
